@@ -1,0 +1,38 @@
+---
+title: "Translational Bioinformatics with R"
+author: "Zhaojie Zhang"
+date: "`r Sys.Date()`"
+site: bookdown::bookdown_site
+output: bookdown::gitbook
+documentclass: book
+bibliography: [book.bib, packages.bib]
+biblio-style: apalike
+link-citations: yes
+github-repo: gongchang/TBioR
+description: "This is a book of using R in Translational Bioinformatics. The output format for this example is bookdown::gitbook."
+---
+
+# Technical details for bookdown publishing
+#load the bookdown packge
+```{r}
+library(bookdown)
+#devtools::install_github('rstudio/bookdown')
+```
+
+```{r include=FALSE}
+# automatically create a bib database for R packages
+knitr::write_bib(c(
+  .packages(), 'bookdown', 'knitr', 'rmarkdown'
+), 'packages.bib')
+```
+
+#Commands to render the book and publish it
+##Build:
+bookdown::render_book("index.Rmd", "bookdown::gitbook")
+##
+preview_chapter()
+##serve:
+serve_book(dir = ".", output_dir = "_book", preview = TRUE,
+  in_session = TRUE, quiet = FALSE)
+##publish:
+bookdown::publish_book()

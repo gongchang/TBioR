@@ -1,0 +1,21 @@
+---
+title: "01-Preface"
+output: html_document
+date: '`r Sys.Date()`'
+---
+
+# Preface
+
+This is the TBioR book. **TBioR** stands for "**T**ranslational **Bio**informatics with **R**".
+
+## What is tranlational bioinformatics?
+
+Translational bioinformatics is concerned with the application of computational and statistical approaches in answering translational medicine questions, especially those arising in the pharma/biotech industry. Here the word "translational" has several meanings: (1) "translating" pre-clinical discovery knowledge into clinical insights helpful for clinical trial design or clinical development in general; (2) "translating" clinical trial data data into knowledge or actionable insights during clinical development; and (3) back "translating" clinical trial data into knowledge or actionable insights for pre-clinical research such as target discovery, disease biology and unmet medical needs.
+
+I will apply statistics, machine learning and causal inference methods to publicly available data to address some important translational questions.
+
+## Why am I writing this book?
+
+R is a great programming language for data science in general, and for translational bioinformatics in particular. R is great for machine learning with tabular data, which is the most common type of data. Also, R is great for statistical modeling, and in translational bioinformatics we are not only interested in predictions (the results of machine learning algorithms), but also the inference where rigorous statistical analysis are better suited for. There are many books and tutorials online about R, but there is a lacking of a specific book devoted to translational bioinformatics, which is a very inter-desciplinary field.
+
+I am a data scientist working in the Pharma/Biotech industry, where my work is mainly related to biomarkers such as exploratory biomarkers analysis, subgroup identification, predictive and prognostic biomarker identification etc. I have a dual educational background in Biology and Computer Science, and have been applying statistics and machine learning in my daily work. The purpose of my wirting of this book is to showcase how to leverage advanced statistics and machine learning as well as causal inference in translational bioinformatics. This is an evolving field inviting innovations and ideas, and I would like to write this book to introduce this field to the general public, to inspire newcomers, to invite peers for critiques and suggestions and just to get the converation on translational bioinformatics started.

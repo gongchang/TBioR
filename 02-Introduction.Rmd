@@ -1,0 +1,27 @@
+---
+title: "02-Introduction"
+output: html_document
+date: '`r Sys.Date()`'
+---
+
+
+# Introduction
+Each chapter of the book is composed of the following three aspects:
+  - An important topic or question in translational bioinformatics
+  - An example of publicly available data (if data is not available publicly, only the methodologies will be described)
+  - R code utilizing advanced statistics, machine learning and/or causal inference methods 
+
+## Topics
+The following topics will be covered:
+1. Predictive biomarker identification using interpretative machine learning approach.
+2. Prognostic predictions using Bayesian statistics. 
+3. Benchmarking survival predictions using statistics and machine learning.
+4. Subgroup identification using causal discovery and counterfactual modeling.
+5. Apply estimand thinking in answering exploratory biomarker questions.
+
+
+## Data
+The datasets used are listed below:
+1. Depmap data
+2. Diabetes data
+3.

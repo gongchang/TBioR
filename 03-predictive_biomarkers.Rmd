@@ -1,0 +1,383 @@
+---
+title: "predictive biomarker analysis from scratch using ESR1 as an example"
+author:
+    - name: Zhaojie Zhang
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+
+output:
+  html_document: 
+    code_folding: "hide"
+    toc: true
+    toc_float: true
+    number_sections: true
+  html_notebook: 
+    code_folding: "hide"
+    toc: true
+    toc_float: true
+    number_sections: true
+
+
+---
+# Predictive biomarkers
+Estrogen receptor (ER) signaling is important in breast cancer cells. One approach of targeted therapy in breast cancer is the use of anti-ER agents. One question during the clinical development of anti-ER agents is the proposal of potential predictive biomarkers which might help with patient enrichment or stratification.
+
+Let's use the publicly available Depmap and CCLE data to identify the best gene expression predictors for ESR1 dependency (ESR1 is the gene that encodes the estrogen receptor), which can potentially serve as top predictive biomarkers. BTW, CCLE data contains the gene expression and sample annotations for a list of ~800 cancer cells lines, while the Depmap data contains , with both datasets available from the the Depmap website.
+
+First, we will use glmnet (elastic net or lasso based methods to build model and also select features)
+
+Then, we will use interpretable ML to understand the feature importance and obtain global/local model interpretation.
+
+## Download the Depmap and CCLE data from Depmap portal
+
+The Depmap data could be downloaded from the following link:
+https://depmap.org/portal/download/all/
+
+Three files are needed:
+1. CCLE gene expression: 
+  CCLE_expression.csv	
+2. Gene dependency scores for each gene in each cell line:
+  CRISPR_gene_effect.csv	
+3. metadata for the cell lines:
+  sample_info.csv
+
+## load required libraries
+```{r}
+library(DescTools)
+require(RCurl); 
+require(caret);
+library(data.table)    # provides enhanced data.frame
+library(ggplot2)       # plotting
+library(glmnet)        # ridge, elastic net, and lasso 
+library(gower)
+library(iml)
+```
+
+## explore the data
+### target of interest
+```{r}
+gene <- "ESR1"
+```
+
+### CCLE
+```{r}
+ccle_expr <- read.csv("CCLE_expression.csv")
+ccle_expr[1:2,1:5]
+```
+
+### Depmap crispr datt
+```{r}
+achilles <- read.csv("CRISPR_gene_effect.csv")
+achilles[1:3,1:5]
+```
+
+
+```{r}
+row.names(ccle_expr) <- ccle_expr$X
+row.names(achilles) <- achilles$DepMap_ID
+```
+
+
+```{r}
+#gene <- "ESR1"
+target <- colnames(achilles)[colnames(achilles) %like any% paste0(gene,"\\..%")]
+target
+```
+
+```{r}
+shared_samples = intersect(row.names(ccle_expr),row.names(achilles))
+```
+
+
+
+## calculate the correlation of CCLE gene expression with ESR1 dependency
+```{r}
+corxy <- function(x){
+  Y<- as.vector(achilles[shared_samples,c(target)])
+  res <- cor.test(Y,x)
+  res$p.value  ##return pvalue
+}
+
+X <- ccle_expr[shared_samples,-(1),drop=FALSE]
+
+res_all <- apply(as.matrix(X), 2,corxy)
+names(res_all) <- colnames(X)
+```
+
+### Sorted the correlation results in descending order
+We can see that the top 5 correlated gene expressions with ESR1 dependencies are PGR, ESR1, CST9, C5AR2, and OTOR.
+
+ESR1 is the target Estrogen receptor itself, and PGR, which stands for progesterone receptor, is also a well-know marker in breast cancer classification and prognosis. This correlation analysis by itself is already quite interesting. 
+```{r}
+ordered_res_all <- sort(res_all, decreasing = FALSE)
+ordered_res_all[1:5]
+```
+
+
+
+```{r}
+names(ordered_res_all[1:5])
+```
+
+
+
+
+
+## Predictive model building
+
+Features: The CCLE gene expression for the top 100 genes whose expression correlated with ESR1 dependency in Depmap
+Response variable: ESR1 dependency score in Depmap
+
+### Let's build a lasso model using the glmnet package
+
+We can see that PGR and ESR1 expressions are the top predictors for ESR1 dependencies.
+```{r,fig.height=6,fig.width=4}
+#  glmnet requires x matrix (of predictors) and vector (values for y)
+y = as.vector(achilles[shared_samples,c(target)])
+#x = model.matrix(y~.,ccle_expr[shared_cell_lines,expr_genes_matched])       # matrix of predictors
+expr_genes_matched <- names(ordered_res_all[1:100])
+x=as.matrix(ccle_expr[shared_samples,expr_genes_matched])
+scaled.x=scale(x)
+
+set.seed(123)                                # replicate  results
+lasso_model <- cv.glmnet(scaled.x, y, alpha=1)         # alpha = 1 lasso
+best_lambda_la <- lasso_model$lambda.1se     # largest lambda in 1 SE
+lasso_coef <- lasso_model$glmnet.fit$beta[,        # retrieve coefficients
+              lasso_model$glmnet.fit$lambda     # at lambda.1se
+              == best_lambda_la]
+coef_la = data.table(lassoReg = lasso_coef)   # build table
+coef_la[, feature := names(lasso_coef)]      # add feature names
+to_plot_r_la = melt(coef_la                     # label table
+               , id.vars='feature'
+               , variable.name = 'model'
+               , value.name = 'coefficient')
+ggplot(data=to_plot_r_la,                       # plot coefficients
+       aes(x=feature, y=coefficient, fill=model)) +
+       coord_flip() +         
+       geom_bar(stat='identity', fill='brown4', color='blue') +
+       facet_wrap(~ model) + guides(fill=FALSE) 
+```
+We can see the lasso model's results are very similar to the elastic net model: PGR and ESR1 are the top predictors for ESR1 dependencies in CCLE cell lines.
+
+### let's plot the corss-validation results of the lasso model. We can see the optimal values of lambda which give rise to the lowest Mean squared error values shwon in the curve.
+```{r}
+plot(lasso_model)
+```
+
+
+
+
+
+
+## Let's try to interpret the lasso model built using interpretable machine learning globally first
+
+Use the interpretable machine learning library (iml) to illustrate the features.
+
+Some technical details:
+  iml needs data frame yet glmnet need matrix format input, and there needs to be a work-around. A work-around is available in the following link:
+https://github.com/christophM/iml/issues/29
+
+### Conduct global interpretation of the whole model
+```{r,fig.height=4}
+##adapted from the github repo above
+predict.function=function(object, newdata){
+newData_x = data.matrix(newdata)
+results<-predict(lasso_model, newData_x)
+return(results)
+}
+
+data1 <- as.data.frame(x)
+colnames(data1) <- expr_genes_matched
+
+iml_predictor <- Predictor$new(lasso_model, data = data1, y = y,
+                           predict.fun = predict.function)
+imp_features <- FeatureImp$new(iml_predictor, loss = "mse")
+plot(imp_features)
+#shapley   <- Shapley$new(predictor, x.interest = x[1,], sample.size = 10, run = TRUE)
+```
+
+```{r}
+imp_features$results
+```
+
+
+### Permutation-based feature importance measures (http://uc-r.github.io/iml-pkg)
+The global interpreataion plot previously is not big enough, so it is plotted again here to clearly show that ESR1 and PGR are the two most important gene expression predictors for ESR1 dependencies in CCLE cell lines in the global model. 
+```{r,fig.height=5,fig.width=2}
+plot(imp_features)
+```
+
+
+
+### sample info
+```{r}
+cell_sampleinfo <- read.csv("sample_info.csv")
+cell_sampleinfo[1:3,]
+```
+
+
+```{r}
+row.names(cell_sampleinfo) <- cell_sampleinfo$DepMap_ID
+```
+
+
+```{r}
+nrow(ccle_expr[shared_samples,expr_genes_matched])
+```
+
+```{r}
+colnames(cell_sampleinfo)
+```
+
+```{r}
+target
+```
+
+
+```{r}
+k=ccle_expr[shared_samples,expr_genes_matched]
+k$target_crispr <- achilles[shared_samples,]$`target` 
+k$ID <- row.names(k)
+k<- merge(k, cell_sampleinfo,by.x="ID",by.y="DepMap_ID")
+```
+```{r}
+k[1:5,]
+```
+
+
+```{r}
+colnames(cell_sampleinfo)
+```
+
+```{r}
+cell_sampleinfo_in_the_same_order<- cell_sampleinfo[shared_samples,]
+```
+
+### distribution of the Depmap crispr dependency score, the smaller the value, the bigger the dependency is
+```{r}
+hist(y)
+```
+```{r}
+index_less_than_minus_point_five <- which (y< (-0.5))
+```
+
+```{r}
+sample_records_less_than_minus_point_five <- cell_sampleinfo_in_the_same_order[which (y< (-0.5)),]
+```
+
+```{r}
+sample_records_less_than_minus_point_five$Index_number <- index_less_than_minus_point_five
+```
+
+```{r}
+colnames(sample_records_less_than_minus_point_five)
+```
+### Cancer types that contain cell lines dependent on ESR1 for survival are mainly in breast cancer and ovarian cancer as expercted
+```{r}
+unique(sample_records_less_than_minus_point_five$primary_disease)
+```
+
+## Let's use local interpretatble machine learning to learn about what are the top predictors for the individual cell lines
+### Let's examine the top CCLE cancer cell lines that are dependent on EST1 for survival
+
+```{r}
+sample_records_less_than_minus_point_five
+```
+
+```{r}
+sample_records_less_than_minus_point_five[sample_records_less_than_minus_point_five$primary_disease %in% c("Breast Cancer"),]$Index_number
+```
+
+```{r}
+sample_records_less_than_minus_point_five[sample_records_less_than_minus_point_five$Index_number %in% c(104,106,290,423,432,596,696,744,987),]
+```
+### Let's zoom in on the top CCLE breast cancer cell lines that are dependent on EST1 for survival: we can see that they can be divided into two categories of "luminal" and "HER2_amp". Let's next use local interpretation to interpret each individual cell to see what the most important gene expression predictors are.
+```{r}
+sample_records_less_than_minus_point_five[sample_records_less_than_minus_point_five$Index_number %in% c(104,106,290,423,432,596,696,744,987),c("cell_line_name","lineage_molecular_subtype","Index_number","CCLE_Name")]
+```
+
+
+### check the luminal ones in the most dependent cell lines (CRES score <-0.5)
+For the example below, we can see that for luminal breast cancer cell lines that are dependent on ESR1 for survival. The top predictor for each individual cell's ESR1 dependency are oftentimes PGR rather than ESR1 itself, with the two of them as the top two predictors. This suggest that PGR is probably a very good indicater of ESR1 pathway activity and potentially a good prognostic or predictive biomarkers in luminal breast cancers.
+```{r}
+lime.explain26 <- LocalModel$new(iml_predictor, k=10,x.interest = data1[104, ])
+plot(lime.explain26)
+```
+
+```{r}
+lime.explain209 <- LocalModel$new(iml_predictor, k=10,x.interest = data1[106, ])
+plot(lime.explain209)
+```
+
+
+```{r}
+lime.explain209 <- LocalModel$new(iml_predictor, k=10,x.interest = data1[106, ])
+plot(lime.explain209)
+```
+
+
+
+```{r}
+lime.explain744 <- LocalModel$new(iml_predictor, k=10,x.interest = data1[744, ])
+plot(lime.explain744)
+```
+
+
+
+### Let's check the  HER2 amplified cell lines in the most dependent cell lines (CRES score <-0.5)
+For the example below, we can see that for HER2 amplified breast cancer cell lines that are dependent on ESR1 for survival. The top predictor for each individual cell's ESR1 dependency are oftentimes ESR1 without PGR among the top predictors. If the previous results suggest that PGR is probably a very good indicater of ESR1 pathway activity and potentially a good prognostic or predictive biomarkers in luminal breast cancers, then it suggests to us that in the HER2-amplified cell lines, PGR will probably not be of much predictive value.
+```{r}
+lime.explain142 <- LocalModel$new(iml_predictor, k=10,x.interest = data1[290, ])
+plot(lime.explain142)
+```
+
+```{r}
+lime.explain502 <- LocalModel$new(iml_predictor, k=10,x.interest = data1[432, ])
+plot(lime.explain502)
+```
+
+
+
+## The overall summary of interpretative machine learning results above
+Technical summary:
+(1) the feature importance based on permutation in iml results are similar to the coeficients of the glm model, although not always the same
+(2) The local models for the highly dependent ones are all similar to the global models in both the bladder and pancreatic cancer smaples
+
+Scientific summary:
+(1) ESR1 and PGR expressions are top predictors for ESR1 dependencies in CCLE cell lines globally;
+(2) In Luminal breast cancers, PGR expression might be the top predictor for ESR1 dependencies than ESR1 expression itself.
+
+## Back to the question of predictive biomarker for anti-ER agents
+For a good predictive biomarker of any given anti-ER agent, there are two additional key pieces of information needed:
+(1) The modeling above essentially is for the ER dependency using crisper in cancer cell lines. We know that different drugs, even if they have the same mechanism of action, may still act differently. Also, cancer cell line data may or may not be predictive of real outcomes in patients. So, we need to have "compound-specific" clinical trial data for PGR+ and PGR- patients.
+(2) For PGR to be predictive, it means that patients receiving a particular treatment should be getting more benefit in PGR+ patients vs PGR- patients than the control group if control group are present.
+
+## Use the publicly revealed clinical trial data and real-world evidence to support and validate the biomarker hypothesis
+
+The following two publications provided the needed evidence to support and validate the previous biomarker hypothesis. Disclosure: I am a co-author of both publications.
+
+(1) Hamilton E, Wang J, Pluard T, Johnson S, Morikawa A, Dees E, Jones R, Haley B, Armstrong A, Cohen A, Munster P, Wright G, Kayali F, Korpal M, Yu L, Cantagallo L, Destenaves B, **Zhang Z**, Gao L, Pipas M, Sahmoud T, Gualberto A and Juric D. Phase I/II trial of H3B-6545, a novel selective estrogen receptor covalent antagonist (SERCA), in estrogen receptor positive (ER+), human factor receptor 2 negative (HER2-) advanced breast cancer. San Antonio Breast Cancer Symposium, Dec 8-12, 2020
+
+H3B-6545 is an anti-ER agent being developed for ER+ advanced or metastatic breast cancer. In the 2020 SABCS publication listed above, the median PFS (progression-free survival) is 5.5 months for ER+ PGR+ breast caner, and 2.1 months for the ER+ PGR- breast cancer. This is a single-arm study, so we do not know what a potential arm would look like.
+
+(2) Chen T, **Zhang Z**, Gao L, Scholz C, Gualberto A, Yu L, Yu K. Using real-world data to evaluate the performance of endocrine therapies in ER+/Her2- metastatic breast cancer patients. AACR Annual Meeting, Apr 8-13, 2022.
+
+The RWE (real-world evidence) data provide an opportunity to look at potential control arms using the Flatiron RWE data. From this 2022 AACR publication above, we know that the median TTD (time-to-treatment discontinuation, a measure that is similar to PFS and often used in the RWE data) is 3.7 months ER+ PGR+ metastatic breast caner, and 2.1 months for the ER+ PGR- metastatic breast cancer.
+
+Together with these two publicly available clinical trial and RWE data, along with the modeling above, we can say with relatively strong confidence that, PGR is potentially a good predictive biomarker for ER+ metastatic breast cancer.
+
+## Why do we care about predictive biomarkers?
+Let's go back to the beginning: why do we need to identify predictive biomarkers? A good predictive biomarker can potentially help identify patients who will likely benefit from such a treatment, and also may help avoid exposing patients who might not benefit. Clinical development with a good predictive biomarker may be more ethical in this sense.
+
+Also, with a patient population identified to be more likely responding to the treatment on interest, the success rate of the such a clinical program might be higher, leading to cost savings for the pharmaceutical company and the society as a whole. 
+
+## What about the anti-ER therapies?
+Breast cancer is the most prevalent malignancies in women, and there is a high unmet medical needs for new therapies, including new anti-ER therapies, because the previously approved anti-ER degrader, Fulvestrant, needs muscle ingection and has poor pharmacokinetics. 
+
+However, two promsing anti-ER agents fell short recently in late stage development. One from Roche:
+https://pharmaphorum.com/news/roches-oral-serd-giredestrant-fails-breast-cancer-trial/
+
+And the other one from Sanofi:
+https://www.fiercebiotech.com/biotech/long-wait-pivotal-data-sanofis-oral-serd-ends-failure
+
+As far as I know, there is biomarker-driven patient selection or enrichment strategies in either trial. So one may ask: would these trial turn out differently if predictive biomarker strategies are applied? It is a big if. I am sure there will be more pre-clinical and clinical work trying to address this. And I hope a successful predictive biomarker strategy could be implemented in future anti-ER therapy trials to aid with clinical development.
+
