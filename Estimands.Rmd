@@ -1,0 +1,39 @@
+# Estimands
+
+The importance of Estimands is introduced in the ICH E9 addendum.
+
+## Estimands, estimator and estimates
+
+-   Estimands: the clearly stated, non-ambiguous variable to be estimated
+
+-   Estimator: the statistics tool used to arrive at the estimands
+
+-   Estimates: the statistics results for the estimation of the intended estimand
+
+## Strategies for Estimands
+
+-   Treatment policy strategy
+
+-   Composite strategy
+
+-   Principal stratum strategy
+
+-   Hypothetical strategy
+
+## Estimand thinking for biomarkers
+
+-   Causal thinking is key in coming up the right strategies for the estimands. It is relatively simple in terms of computational/statistics methods involved for treatment policy and composite strategies. A few examples:
+
+    -   Treatment discontinuation due to biomarker monitoring
+
+    -   Composite endpoints involving biomarkers surrogates
+
+-   For principal stratum and hypothetical strategies, relatively complicated causal inference methods need to be applied. We will go into details and give some application examples in biomarkers:
+
+    -   anti-drug antibody appearance in the treatment arm
+
+    -   Use of rescue medication in the trial
+
+## R vignettes with examples to follow
+Many of the relevant examples can only be demonstrated with non-public clinical trial data. I will probably include R vignettes later using simulation data.
+

@@ -1,0 +1,38 @@
+# Subgroup Identification
+
+The purpose of subgroup identification is to identify subgroups of patients that may respond better or worse, compared to the entire clinical trial population.
+
+## Methods
+
+There are many methods. Here I am going to focus on one general framework of using counterfactual modeling for subgroup identification.
+
+There are several steps in the counterfactual modeling for subgroup identification:
+
+1.   variable selection
+
+2.  counterfactual modeling of patient response
+
+3.  subgroup identification
+
+## Variable selection
+There are many variable selection methods. In the previous chapter of "prognostic modeling", I have already included 5, with detailed examples for 4 methods. These are all useful.
+
+In addition to this, I would like to introduce the use of "causal discovery" as a variable selection method. 
+
+"classical" causal discovery methods include constrain-based and score-based methods. There are also newer approaches for causal discovery. These methods can be used to derive potential "causal" networks from observational data. I found in biomarker data, especially high-dimensional biomarker data with multiple timepoints, along with alongitudinal clinical readouts, causal disccovery methods can be applied to derive a biomarker network and identify direct "parents" of the clinical readout node (in the derived network). Then we just need to use the biomarkers represented by the "parent" nodes of the clinical readout node for later modeling instead of the whole list of biomarkers, which could be a lot. This should work relatively well with RNASEQ and Somascan proteomics data. For genetics data such as germline snps, it may not work as well due to the huge number of snps.
+
+## Counterfactual modeling of patient response
+Say, if we have identified a list of key "causal" biomarkers for the clinical readout (or, we could use many of the variable selection methods covered in prognostic modeling), we can then use counterfactual-based causal inference methods for patient response modeling.
+
+We will use the baseline biomarker data (with the list of biomarkers defined by the variable selection results), key clinical features, treatment info and clinical readout for patient response modeling. We are going to use "treatment" and "placebo" (and/or the detailed dose info) as regular variables to build a predictive model using machine learning models of our choice (random forest, xgboost, logistic regression or neural nets etc.).
+
+## Subgroup identification
+Once we have the predictive model built, then we can feed in the model by chaning the treatment information for all the patients, to predict what the clinical readout would be if the patient receives different treatment.
+
+For example, we can subtract the predicted clinical readout of each patient under "treatment" and "placebo", which will give rise to the predicted difference of "treatment" and "placebo" for each patient. Then we can build predictive models using the baseline biomarker data, key clinical features, and the predicted clinical response difference. The variable importance of this model will indicate exactly how important this variable for the predicted response difference.
+
+FInally, we can pick a couple of top biomarker predictors and build a shallow model (decision tree for example) using the baseline top biomarker predictors, key clinical features, and the predicted clinical response difference. Then we can visualize the decision tree and subgroups of superior or worse outcomes will become apparent from the plot.
+
+## R vignettes with examples to follow:
+
+I have relevant examples with non-public clinical trial data, which could not be shown here. I will probably include R vignettes later using simulation data, or other relevant public data.

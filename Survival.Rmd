@@ -1,0 +1,33 @@
+# Survival prediction benchmarking
+
+The purpose of bencmarking survival predictions is to compared coxph (cox proportional hazards) method with machine learning algorithms for survival prediction tasks.
+
+## Methods
+
+There are many benchmarking packages. In R, I found tidymodels and mlr3 to be two great ones. Here I am going to focus on using the Mlr3 R package to benchmark survival prediction, mainly because mlr3 provides a large collection of survival prediction algorithms:
+
+-   surv.akritas, surv.blackboost, surv.cforest, surv.coxboost, surv.coxph, surv.coxtime, surv.ctree, surv.cv_coxboost, surv.cv_glmnet, surv.deephit, surv.deepsurv, surv.dnnsurv, surv.flexible, surv.gamboost, surv.gbm, surv.glmboost, surv.glmnet, surv.kaplan, surv.loghaz, surv.mboost, surv.nelson, surv.obliqueRSF, surv.parametric, surv.pchazard, surv.penalized, surv.ranger, surv.rfsrc, surv.rpart, surv.svm, surv.xgboost
+
+## Summary
+
+coxph actually performs OK especially when there is no missing data, or when the missing data could be imputed.
+
+Among a large numebr of survival prediction algorithm, I found xgboost and gbm tend to work the best in terms of accuracy and speed. And they work for data with missing values.
+
+## Conclusions
+
+-   Mlr3 is a great ML benchmarking framework, especially for tasks where the are a large number of available learners.
+
+-   Machine learning algorithms like xgboost and gbm are very useful for survival prediction: Perform well on the prediction task Work with missing data out of the box Fast
+
+-   A few lessons:
+
+    -   Feature selection or fine-tuning of hyperparameters did not improve the performance significantly.
+
+    -   Numerical encoding of categorical variables are needed for many machine learning algorithms, which might need to be evaluated further of its impact on performance.
+
+    -   For the table-like data with few variables in this case, more complex algorithms may not help much with performance (a few deep-learning survival models were also benchmarked)
+
+## R vignettes with examples to follow:
+
+I have relevant examples with non-public real-world evidence data, which could not be shown here. I will probably include R vignettes later using simulation data, or other relevant public data.

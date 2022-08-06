@@ -1,0 +1,16 @@
+book_filename: "TranslationalBioinformaticsWithR"
+language:
+  ui:
+    chapter_name: "Chapter "
+delete_merged_file: true
+rmd_files: [
+  'index.Rmd'
+  ,'01-Preface.Rmd'
+  ,'02-Introduction.Rmd'
+  ,'DimensionalityReduction.Rmd'
+  ,'Prognostic.Rmd'
+  ,'03-predictive_biomarkers.Rmd'
+  ,'Subgroups.Rmd'
+  ,'Survival.Rmd'
+  ,'Estimands.Rmd'
+  ]

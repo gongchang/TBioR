@@ -1,9 +1,3 @@
----
-title: "01-Preface"
-output: html_document
-date: '`r Sys.Date()`'
----
-
 # Preface
 
 This is the TBioR book. **TBioR** stands for "**T**ranslational **Bio**informatics with **R**".

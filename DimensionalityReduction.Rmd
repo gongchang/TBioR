@@ -1,0 +1,139 @@
+# Dimensionality reduction
+In data science, we are often faced with high dimensional data. In order to use high dimensional data in statistical or machine learning models, dimensionality reduction techniques need to be applied. We can reduce the dimensions of the data using methods like PCA or t-SNE to derive new features, or we can apply feature selection and extraction to filter the data. Along the way, differnt ways of visualizationare also going to be applied to demonstrate the applicabilities of the differnt methods and to explore and interpret the Pima Indian diabetes data.
+
+The outline of the Dimensionality Reduction vignettes:
+(1) PCA and t-SNE 
+(2) feature selection and feature extraction
+
+## setup the environment
+```{r}
+library(dplyr)
+library(caret)
+library(Rtsne)
+library(ggplot2)
+library(psych)
+library(ggfortify)
+library(textshape)
+library(mlbench)
+```
+
+
+
+## load and explore the data
+### load the data
+```{r}
+data("PimaIndiansDiabetes")
+str(PimaIndiansDiabetes)
+```
+
+### check the correlation of features
+For example, you can already see the relatively strong positive correlations between glucose and diabetes.
+```{r,fig.height=8}
+pairs.panels(PimaIndiansDiabetes,
+             gap = 0,
+             pch=21)
+```
+
+
+## Dimensionality reduction methods: PCA
+### Run PCA and print out the summary
+You can see that that the 1st components captures 26.2% of the variance in the data, 2nd component captures 21.6% of the variance in the data ... For this dataset, the first two components together only help to explain only 47.8% of the variance in the data.
+```{r}
+prin_components <- prcomp(PimaIndiansDiabetes[-c(9)],
+             center = TRUE,
+            scale. = TRUE)
+summary(prin_components)
+```
+
+
+
+### autoplot of the PCA results
+```{r}
+autoplot(prin_components)
+```
+### You can visualize glucose and diabetes together in the PCA plot
+```{r}
+autoplot(prin_components,data=PimaIndiansDiabetes,size="glucose",colour="diabetes")
+```
+
+
+## Dimensionality method: t-SNE
+### run t-SNE and extract the t-SNE components
+```{r}
+set.seed(1342)
+for_tsne <- PimaIndiansDiabetes %>%
+  dplyr::mutate(PatientID=dplyr::row_number()) 
+tsne_trans <- for_tsne %>%
+  dplyr::select(where(is.numeric)) %>%
+  column_to_rownames("PatientID") %>%
+  scale() %>% 
+  Rtsne()
+
+tsne_df <- tsne_trans$Y %>% 
+  as.data.frame() %>%
+  dplyr::rename(tsne1="V1",
+         tsne2="V2") %>%
+  dplyr::mutate(PatientID=dplyr::row_number()) %>%
+  dplyr::inner_join(for_tsne, by="PatientID")
+```
+
+### plot the t-SNE results: a non-linear representation of the data; you can clearly see a better separation of diabetes neg and pos patients, although still not good enough.
+```{r}
+ggplot(tsne_df,aes(x = tsne1, 
+             y = tsne2,
+             size=glucose,
+             color = diabetes))+
+  geom_point(alpha=0.4)+
+  theme(legend.position="right")
+```
+
+
+## Feature selection and extraction for machine learning modeling
+There are roughly two groups of feature selection methods: wrapper methods and filter methods. 
+
+Wrapper methods evaluate subsets of variables which allows to detect the possible interactions amongst variables.The two main disadvantages of these methods are: 
+(1) The increasing overfitting risk when the number of observations is insufficient.
+(2) The significant computation time when the number of variables is large
+
+Filter type methods select variables regardless of the model. They are based only on general features like the correlation with the variable to predict. Filter methods suppress the least interesting variables. The other variables will be part of a classification or a regression model used to classify or to predict data. These methods are particularly effective in computation time and robust to overfitting.
+
+Below are a couple of examples:
+
+
+### wrapper method: recursive feature elimination (rfe)
+Preliminary conclusions: The top 5 variables (out of 6):
+   pedigree, pregnant, mass, glucose, age
+
+One technical detail: the rfe function does not work when the outcome "y" is factor (which is the case for the dataset), which needs to be converted into numeric.
+```{r}
+set.seed(1342)
+feature_size_list <-  c(1:8) # for a total of 8 predictors 
+
+rfe_ctrl <- rfeControl(functions = lmFuncs,
+                   method = "repeatedcv",
+                   repeats = 5,
+                   verbose = FALSE)
+
+rfe_results <- rfe(PimaIndiansDiabetes[,-which(colnames(PimaIndiansDiabetes) %in% c("diabetes"))], as.numeric(PimaIndiansDiabetes$diabetes),
+                 sizes = feature_size_list,
+                 rfeControl = rfe_ctrl)
+
+rfe_results 
+```
+
+
+### filter method: single variate filtering method where the features are pre-screened using simple univariate statistical methods, and then only those that pass the criteria are selected for subsequent modeling.
+
+Preliminary conclusions from the results:
+On average, the top 5 selected variables (out of a possible 8):
+   age (100%), glucose (100%), insulin (100%), mass (100%), pedigree (100%)
+
+```{r}
+set.seed(1342)
+filter_Ctrl <- sbfControl(functions = rfSBF, method = "repeatedcv", repeats = 5)
+filter_results <- sbf(PimaIndiansDiabetes[,-which(colnames(PimaIndiansDiabetes) %in% c("diabetes"))], PimaIndiansDiabetes$diabetes, sbfControl = filter_Ctrl)
+filter_results
+```
+
+
+

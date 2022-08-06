@@ -1,0 +1,222 @@
+# Prognostic modeling
+
+The purpose of Prognostic modeling is to identify and quantify the prognostic values of biomarkers for clinical outcome of interest.
+
+## Diabetes Dataset:
+
+The dataset is from the original publication below: Bradley Efron, Trevor Hastie, Iain Johnstone and Robert Tibshirani (2004) "Least Angle Regression," Annals of Statistics (with discussion), 407-499
+
+The details of the data is available at the following urls:
+
+-   <https://www4.stat.ncsu.edu/~boos/var.select/diabetes.html>
+
+-   <http://statweb.lsu.edu/faculty/li/IIT/diabetes.txt>
+
+There are ten baseline variables, age, sex, body mass index, average blood pressure, and six blood serum measurements were obtained for each of n = 442 diabetes patients, as well as the response of interest, a quantitative measure of disease progression one year after baseline.
+
+The variables are named: - age sex bmi map tc ldl hdl tch ltg glu y
+
+
+## Load and explore the data
+```{r}
+library(ggplot2)
+library(psych)
+library(data.table)
+```
+
+```{r}
+diabetes <- read.csv("diabetes.csv")
+str(diabetes)
+```
+
+## overview of the data: correlations and histograms
+
+```{r,fig.height=8}
+pairs.panels(diabetes,
+             gap = 0,
+             pch=21)
+```
+
+Some clear pattern is already apparent from the plot above: - The strong positive correlation between tc and ldl - The negative correlation between hdl and other variables including the response variable y
+
+## Four methods will be tried for prognostic modeling of the diabetes data
+
+-   Full model: for this example, we have 442 records and 10 predictors, and we can afford to use the full model for prognostic modeling
+
+    The following three methods can be used to do variable selection, which is needed especially when the number of covariates is large. While it is not the case with this example, that is what we frequently encounter in biomarkers-related translational projects.
+
+-   Lasso regression
+
+-   Stepwise selection
+
+-   Bayesian modeling with horseshoe priors
+
+## Full model for prognostic modeling
+```{r}
+full_model_dia <- glm(glm(y ~ ., data=diabetes, family=gaussian(link="identity")))
+```
+
+```{r}
+summary(full_model_dia)
+```
+### Problems with the full model
+Some of the clear pattern we saw in the full model are not evident in the full model results, because of the correlations between covariates. For example, we know that among all predictors, the single covariate that has a negative correlation with the outcome y is hdl from the previous correlation, but we cannot draw such conclusions from the full model results.
+
+So it is not wise to just throw everything at the model and hope it will yield the correct results. We need to take into consideration the relationship between variables, let's try the other three methods with covariate selection.
+
+## Lasso regression
+From the lasso regression results below, we can see that 4 predictor variables of itg, hdl, bp and bmi are selected, with the hdl covariate being the one that has a negative coefficient. So this result agrees more with our previous correlation exploration than the full model result above.
+```{r}
+library(glmnet)
+#  glmnet requires x matrix (of predictors) and vector (values for y)
+y = as.vector(diabetes$y)
+x=as.matrix(diabetes[,-c(11)])
+scaled.x=scale(x)
+
+set.seed(123)                                # replicate  results
+lasso_model_dia <- cv.glmnet(scaled.x, y, alpha=1)         # alpha = 1 lasso
+best_lambda_dia <- lasso_model_dia$lambda.1se     # largest lambda in 1 SE
+lasso_coef <- lasso_model_dia$glmnet.fit$beta[,        # retrieve coefficients
+              lasso_model_dia$glmnet.fit$lambda     # at lambda.1se
+              == best_lambda_dia]
+coef_la = data.table(lassoReg = lasso_coef)   # build table
+coef_la[, feature := names(lasso_coef)]      # add feature names
+to_plot_r_la = melt(coef_la                     # label table
+               , id.vars='feature'
+               , variable.name = 'model'
+               , value.name = 'coefficient')
+ggplot(data=to_plot_r_la,                       # plot coefficients
+       aes(x=feature, y=coefficient, fill=model)) +
+       coord_flip() +         
+       geom_bar(stat='identity', fill='brown4', color='blue') +
+       facet_wrap(~ model) + guides(fill=FALSE) 
+```
+
+### Examine the cross validation results of the lasso regression model and the best lambda values
+```{r}
+plot(lasso_model_dia)
+```
+
+### The lambda value 1 standard deviation away from the "optimal" lambda value by cross-validation, which can be used to fit the data to avoid overfitting
+```{r}
+lasso_model_dia$lambda.1se
+```
+
+### The coefs plotted above
+
+```{r}
+coef(lasso_model_dia, s = "lambda.1se")
+```
+
+### Refit a glm model using the lasso selected variables
+```{r}
+sv_lasso_dia <- glm(glm(y ~ bmi + bp + hdl + ltg, data=diabetes, family=gaussian(link="identity")))
+summary(sv_lasso_dia)
+```
+
+## Stepwise variable selection
+Use both forward and backward feature selection
+```{r}
+library(MASS)
+base_model <- lm(y~., data=diabetes)
+results_stepwise_selection <- stepAIC(base_model,direction="both")
+```
+
+So the optimal variables selected by stepwise selection is 
+sex + bmi + bp + tc + ldl + ltg
+
+### Refit a glm model using the stepwise selected variables
+```{r}
+sv_step_dia <- glm(glm(y ~ sex + bmi + bp + tc + ldl + ltg, data=diabetes, family=gaussian(link="identity")))
+summary(sv_step_dia)
+```
+
+## Bayesian modeling with horseshoe priors
+
+We will use the brms package for the bayesian variable selection step
+```{r}
+library(brms)
+library(tidyverse)
+```
+
+
+### Variable selection horseshoe priors
+We specify which variables as the base variables and which are subject to selection using the horseshoe prior. Because bmi and hdl have the best correlation (positive and negative) with the response variable y, we are going to use these two as the base variables, and the others as the ones subject to selection.
+
+```{r}
+# For variable selection, scale the predictor and outcome to have unit variance
+diabetes_std <- scale(diabetes)
+```
+```{r}
+diabetes[1:2,]
+```
+
+
+```{r}
+n_cov = 10  # Number of variables
+n_obs = nrow(diabetes) # Number of observations
+n_p = 5 # prior info, number of optimal variables
+
+#in horseshoe priors, another way to specify is the par_ratio (n_p/(n_cov - n_p)) 
+p_tau = n_p/(n_cov - n_p) / sqrt(n_obs)  # Shrinkage parameter tau,reference: Piironen et.al., 2016
+
+fit_brms <- brm(
+    bf(y ~ x1 + x2,
+       formula("x1 ~ age + sex + bp + tc + ldl + tch + ltg + glu"),
+       formula("x2 ~ bmi + hdl"),
+       nl = TRUE),
+    data = diabetes_std, family = gaussian(),
+    prior = c(prior(horseshoe(df = 1, scale_global = p_tau, df_global = 1), class = "b",nlpar="x1"),
+              prior(normal(0, 1), class = "b",nlpar="x2")),
+    warmup = 1000, iter = 2000, chains = 4, cores = 4,
+    control = list(adapt_delta = 0.99, max_treedepth = 15),
+    seed = 1231)
+```
+
+### Check the bayesian modeling results using horseshoe priors
+```{r}
+summary(fit_brms)
+```
+```{r}
+plot(fit_brms)
+```
+
+### Check the posterier distribution of the horseshoe results
+
+The data was scaled before modeling, so it has unit variance.
+
+If the 95% confidence-interval of a variable is not overlapping with 0, we will consider it to be selected. So the plot below indicates that in addition to bmi and hdl (our base variables, which are not subject to horshoe prior selection), sex, bp and ltg are selected.
+```{r}
+mcmc_plot(fit_brms)
+```
+
+
+
+
+### Refit a glm model using the horseshoe selected variables
+```{r}
+sv_horseshoe_dia <- glm(glm(y ~ sex + bmi + bp + hdl + ltg, data=diabetes, family=gaussian(link="identity")))
+summary(sv_horseshoe_dia)
+```
+
+## Comparison of the models built using the different variable selection methods
+One thing I would like to point out is that the numerical measure of model performance is one way of evaluating the results. It is not the only way, and it is not necessarily the best either.
+
+We always need to have justifications from the scientific or clinical angles. Subject matter knowledge would be helpful. Why don't we just rely the scientific or clinical inputs? Because they too have limitations. The fact we are using statistical models instead of physical models to perform the prognostic modeling suggests that we lack a good understanding of the science behind prognosis.
+
+With the caveats and limitations states, let's put the results together and compare them using BIC.
+
+```{r}
+library(flexmix)
+BIC(full_model_dia)
+BIC(sv_lasso_dia)
+BIC(sv_step_dia)
+BIC(sv_horseshoe_dia)
+```
+
+
+The 4 methods above yield decreasing BIC values. With BIC values, the lower the value, the better the goodness-of-fit. So our bayesian horseshoe prior approach appears to yield the better performance from this BIC numeric measure; at the same time, this approach also included our knowledge about the data by specifying the base variables (bmi and hdl). Based on the results, I would recommend using the bayesian horseshoe prior approach for variable selection to combine both great technical performance and the ability to incorportate subject matter knowledge.
+
+## More approaches are available for variable selection for prognostic modeling and other predictive modeling. For rexample, another bayesian-based variable selection method is called projection-based prediction, implemented in the R package "projpred". There is a very good example vignettes available herer:
+https://cran.r-project.org/web/packages/projpred/vignettes/projpred.html
+

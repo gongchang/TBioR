@@ -1,27 +1,44 @@
 ---
-title: "02-Introduction"
-output: html_document
-date: '`r Sys.Date()`'
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
-
 # Introduction
+
 Each chapter of the book is composed of the following three aspects:
-  - An important topic or question in translational bioinformatics
-  - An example of publicly available data (if data is not available publicly, only the methodologies will be described)
-  - R code utilizing advanced statistics, machine learning and/or causal inference methods 
+
+1.  An important topic or question in translational bioinformatics
+
+2.  An example of publicly available data (if data is not available
+    publicly, only the methodologies will be described)
+
+3.  R code utilizing advanced statistics, machine learning and/or causal
+    inference methods
 
 ## Topics
+
 The following topics will be covered:
-1. Predictive biomarker identification using interpretative machine learning approach.
-2. Prognostic predictions using Bayesian statistics. 
-3. Benchmarking survival predictions using statistics and machine learning.
-4. Subgroup identification using causal discovery and counterfactual modeling.
-5. Apply estimand thinking in answering exploratory biomarker questions.
 
+-   Dimensionality reduction
+    -   PCA and tSNE
+    -   Feature selection and extraction for machine learning
 
-## Data
-The datasets used are listed below:
-1. Depmap data
-2. Diabetes data
-3.
+-   Prognostic and Predictive biomarkers
+
+    -    Predictive biomarker identification using interpretative
+        machine learning approach.
+
+    -   Prognostic predictions using Bayesian statistics.
+
+-   Benchmarking survival predictions using statistics and machine
+    learning
+
+-   Subgroup identification using causal discovery and counterfactual
+    modeling
+
+-   Estimand thinking in biomarkers:
+
+    -   ICH E9 addendum on Estimands
+
+    -   Estimands thinking and biomarkers
